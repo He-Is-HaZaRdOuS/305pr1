@@ -20,9 +20,6 @@ int main(int argc, char *argv[]) {
     printf("Map size cannot be less than 2\n");
     return 1;
   }
-#ifdef USE_UNICODE
-  setlocale(LC_ALL, "");
-#endif
 
   printf("Map size: %dx%d\n", map_size, map_size);
   printf("Coordinates of players are chosen randomly\n");
