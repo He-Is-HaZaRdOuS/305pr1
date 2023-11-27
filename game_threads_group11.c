@@ -8,7 +8,7 @@
 #define ROUND_COUNT 5
 
 /* Declare shared variables */
-sem_t mutex[ROUND_COUNT];
+sem_t mutex;
 int currentRound = 1;
 int tr_counter = 1;
 int map_size;
@@ -54,10 +54,8 @@ int main(const int argc, char *argv[]) {
   printf("Map size: %dx%d\n", map_size, map_size);
   printf("Thread count: %d\n", th_count);
 
-  /* initialize semaphores to be used across threads */
-  for(int z = 0; z < ROUND_COUNT; z++) {
-    sem_init(&mutex[z], 0, 1);
-  }
+  /* initialize semaphore to be used across threads */
+    sem_init(&mutex, 0, 1);
 
   /* allocate memory to Player objects */
   players = malloc(sizeof(Player) * th_count);
@@ -99,9 +97,7 @@ int main(const int argc, char *argv[]) {
   /* destroy objects */
   free(threads);
   free(players);
-  for(int z = 0; z < ROUND_COUNT; z++) {
-    sem_destroy(&mutex[z]);
-  }
+  sem_destroy(&mutex);
   return 0;
 }
 
@@ -113,7 +109,7 @@ void *threadRoutine(void *args) {
   /* iterate for 5 rounds */
   while(currentRound != ROUND_COUNT + 1) {
     /* lock */
-    sem_wait(&mutex[0]);
+    sem_wait(&mutex);
     /* CRITICAL SECTION */
 
     //printf("tr_counter: %d\n", tr_counter);
@@ -140,7 +136,7 @@ void *threadRoutine(void *args) {
     }
 
     /* unlock */
-    sem_post(&mutex[0]);
+    sem_post(&mutex);
 
     /* remainder non-critical section */
     {
