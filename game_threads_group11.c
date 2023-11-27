@@ -94,7 +94,7 @@ int main(const int argc, char *argv[]) {
     pthread_join(threads[i], NULL);
   }
 
-  printf("currentRound: %d\n", currentRound);
+  //printf("currentRound: %d\n", currentRound);
 
   /* destroy objects */
   free(threads);
@@ -128,14 +128,15 @@ void *threadRoutine(void *args) {
      * additional global variables to communicate between threads
      * and store information about each round.
      */
-    sleep(1); /* remove sleep function when actually testing (placeholder) */
+    //sleep(1); /* remove sleep function when actually testing (placeholder) */
 
     tr_counter++; /* increment dummy variable */
     /* if dummy variable reaches ROUND_COUNT, transition into new round and reset dummy variable */
     if(tr_counter == ROUND_COUNT) {
       currentRound++;
       tr_counter = 1;
-      printf("Round: %d\n", currentRound);
+      if(currentRound <= 5)
+        printf("Round: %d\n", currentRound);
     }
 
     /* unlock */
