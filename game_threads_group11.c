@@ -1,8 +1,20 @@
 #include <pthread.h>
+#include <semaphore.h>
+#include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 
+#define ROUND_COUNT 5
+
+/* Declare shared variables */
+sem_t mutex[ROUND_COUNT];
+int currentRound = 1;
+int tr_counter = 1;
+int map_size;
+int th_count;
+
+/* Player class */
 typedef struct Player {
   int x, y;
   int id;
@@ -11,18 +23,20 @@ typedef struct Player {
 
 Player *players;
 
-void printBox(int x, int y, Player *players, int pcount);
+/* Prototype functions */
+void printBox(int x, int y, const Player *players, int player_count);
 void assignUniquePositions(Player *players, int playerCount, int mapSize);
 void *threadRoutine(void *args);
 
-int main(int argc, char *argv[]) {
+int main(const int argc, char *argv[]) {
+  /* Handle all possible CLA errors */
   if (argc != 3) {
     printf("Usage: ./game_threads <map_size> <thread_count>\n");
     return 1;
   }
 
-  int map_size = atoi(argv[1]);
-  int th_count = atoi(argv[2]);
+  map_size = atoi(argv[1]);
+  th_count = atoi(argv[2]);
   if (map_size < 2) {
     printf("Map size cannot be less than 2\n");
     return 1;
@@ -40,46 +54,98 @@ int main(int argc, char *argv[]) {
   printf("Map size: %dx%d\n", map_size, map_size);
   printf("Thread count: %d\n", th_count);
 
+  /* initialize semaphores to be used across threads */
+  for(int z = 0; z < ROUND_COUNT; z++) {
+    sem_init(&mutex[z], 0, 1);
+  }
+
+  /* allocate memory to Player objects */
   players = malloc(sizeof(Player) * th_count);
 
   srand(time(NULL));
-  assignUniquePositions(players, th_count, map_size);
-  for (int i = 0; i < th_count; i++) {
-    players[i].id = i + 1;
-    players[i].score = 0;
+
+  /* initialize Player objects */
+  {
+    assignUniquePositions(players, th_count, map_size);
+    for (int i = 0; i < th_count; i++) {
+      players[i].id = i + 1;
+      players[i].score = 0;
+    }
   }
+
+  /* print players info */
   for (int i = 0; i < th_count; i++) {
-    printf("player%d: [%d,%d]", i + 1, players[i].x, players[i].y);
+    printf("player%d: [%d,%d]", players[i].id, players[i].x, players[i].y);
     if (i != th_count - 1)
       printf(", ");
   }
   printf("\n");
   printBox(map_size, map_size, players, th_count);
 
+  printf("currentRound: %d\n", currentRound);
+
+  /* Allocate memory to thread objects and call them */
   pthread_t *threads = malloc(sizeof(pthread_t) * th_count);
   for (int i = 0; i < th_count; i++) {
     pthread_create(threads + i, NULL, threadRoutine, players + i);
   }
 
+  /* Wait for termination */
   for (int i = 0; i < th_count; i++) {
     pthread_join(threads[i], NULL);
   }
 
+  printf("currentRound: %d\n", currentRound);
+
+  /* destroy objects */
   free(threads);
   free(players);
+  for(int z = 0; z < ROUND_COUNT; z++) {
+    sem_destroy(&mutex[z]);
+  }
   return 0;
 }
 
 void *threadRoutine(void *args) {
-  Player p = *(Player *)args;
-  printf("I am player #%d at [%d,%d]\n", p.id, p.x, p.y);
+  const Player p = *(Player *)args; /* type-cast voidptr to Player type */
 
+  /* need to check if currentRound is not bigger than ROUND_COUNT before entering, use if statement */
+
+  /* lock */
+  sem_wait(&mutex[currentRound]);
+
+  /* CRITICAL SECTION */
+  printf("I am player #%d at [%d,%d]\n", p.id, p.x, p.y);
   // TODO: Make a guess?
+  /*
+   * CALCULATE MANHATTAN DISTANCE TO ALL OTHER PLAYERS
+   *
+   * either do the whole guessing logic here or make
+   * a separate function and call it here, you can declare
+   * additional global variables to communicate between threads
+   * and store information about each round.
+   */
+  sleep(4); /* remove sleep function when actually testing (placeholder) */
+
+  tr_counter++; /* increment dummy variable */
+  /* if dummy variable reaches ROUND_COUNT, transition into new round and reset dummy variable */
+  if(tr_counter == ROUND_COUNT) {
+    currentRound++;
+    tr_counter = 0;
+  }
+
+  printf("tr_counter: %d\n", tr_counter);
+
+  /* unlock */
+  sem_post(&mutex[currentRound]);
+
+
+  /* remainder non-critical section */
 
   return NULL;
 }
 
-void printBox(int x, int y, Player *players, int player_count) {
+void printBox(const int x, const int y, const Player *players, const int player_count) {
   // top border
   printf("+");
   for (int i = 0; i < x; i++) {
@@ -128,14 +194,14 @@ void printBox(int x, int y, Player *players, int player_count) {
  * @param playerCount The number of players to assign positions for.
  * @param mapSize The size of the square map
  */
-void assignUniquePositions(Player *players, int playerCount, int mapSize) {
+void assignUniquePositions(Player *players, const int playerCount, const int mapSize) {
   struct Point {
     int x;
     int y;
   };
 
   // calculate the total number of positions on the map
-  size_t posCount = mapSize * mapSize;
+  const size_t posCount = mapSize * mapSize;
 
   // allocate (mapSize * mapSize * 8) bytes for the array of available positions
   struct Point *availables = malloc(posCount * sizeof(struct Point));

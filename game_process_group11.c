@@ -14,7 +14,7 @@ typedef struct Player {
 
 int map_size;
 
-void printBox(int width, int height, Player *players, int pcount);
+void printBox(int width, int height, Player *players, int player_count);
 void guess1(int *x, int *y);
 void guess2(int *x, int *y);
 
