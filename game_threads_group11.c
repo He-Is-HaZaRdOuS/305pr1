@@ -82,8 +82,7 @@ int main(const int argc, char *argv[]) {
   printf("\n");
   printBox(map_size, map_size, players, th_count);
 
-  printf("currentRound: %d\n", currentRound);
-
+  printf("Round: %d\n", currentRound);
   /* Allocate memory to thread objects and call them */
   pthread_t *threads = malloc(sizeof(pthread_t) * th_count);
   for (int i = 0; i < th_count; i++) {
@@ -109,38 +108,48 @@ int main(const int argc, char *argv[]) {
 void *threadRoutine(void *args) {
   const Player p = *(Player *)args; /* type-cast voidptr to Player type */
 
-  /* need to check if currentRound is not bigger than ROUND_COUNT before entering, use if statement */
+  /* busy wait until previous player makes their guess */
+  while(tr_counter != p.id);
+  /* iterate for 5 rounds */
+  while(currentRound != ROUND_COUNT + 1) {
+    /* lock */
+    sem_wait(&mutex[0]);
+    /* CRITICAL SECTION */
 
-  /* lock */
-  sem_wait(&mutex[currentRound]);
+    //printf("tr_counter: %d\n", tr_counter);
 
-  /* CRITICAL SECTION */
-  printf("I am player #%d at [%d,%d]\n", p.id, p.x, p.y);
-  // TODO: Make a guess?
-  /*
-   * CALCULATE MANHATTAN DISTANCE TO ALL OTHER PLAYERS
-   *
-   * either do the whole guessing logic here or make
-   * a separate function and call it here, you can declare
-   * additional global variables to communicate between threads
-   * and store information about each round.
-   */
-  sleep(4); /* remove sleep function when actually testing (placeholder) */
+    printf("I am player #%d at [%d,%d]\n", p.id, p.x, p.y);
+    // TODO: Make a guess?
+    /*
+     * CALCULATE MANHATTAN DISTANCE TO ALL OTHER PLAYERS
+     *
+     * either do the whole guessing logic here or make
+     * a separate function and call it here, you can declare
+     * additional global variables to communicate between threads
+     * and store information about each round.
+     */
+    sleep(1); /* remove sleep function when actually testing (placeholder) */
 
-  tr_counter++; /* increment dummy variable */
-  /* if dummy variable reaches ROUND_COUNT, transition into new round and reset dummy variable */
-  if(tr_counter == ROUND_COUNT) {
-    currentRound++;
-    tr_counter = 0;
-  }
+    tr_counter++; /* increment dummy variable */
+    /* if dummy variable reaches ROUND_COUNT, transition into new round and reset dummy variable */
+    if(tr_counter == ROUND_COUNT) {
+      currentRound++;
+      tr_counter = 1;
+      printf("Round: %d\n", currentRound);
+    }
 
-  printf("tr_counter: %d\n", tr_counter);
+    /* unlock */
+    sem_post(&mutex[0]);
 
-  /* unlock */
-  sem_post(&mutex[currentRound]);
+    /* remainder non-critical section */
+    {
 
+      /* busy wait until new round is started */
+      while(tr_counter != p.id && currentRound != ROUND_COUNT + 1);
 
-  /* remainder non-critical section */
+    }
+
+  } /* end of while loop */
 
   return NULL;
 }
