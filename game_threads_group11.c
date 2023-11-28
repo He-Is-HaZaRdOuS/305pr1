@@ -128,7 +128,7 @@ void *threadRoutine(void *args) {
 
     tr_counter++; /* increment dummy variable */
     /* if dummy variable reaches ROUND_COUNT, transition into new round and reset dummy variable */
-    if(tr_counter == ROUND_COUNT) {
+    if(tr_counter == th_count + 1) {
       currentRound++;
       tr_counter = 1;
       if(currentRound <= 5)
