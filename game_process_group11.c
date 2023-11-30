@@ -223,7 +223,6 @@ void guess1(int *x, int *y, int manhattan) {
             }
         }
         int guess = rand() % size;
-        printf("guess: %d size: %d\n",guess, size);
         *x = coords[guess][0];
         *y = coords[guess][1];
     }
