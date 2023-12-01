@@ -15,8 +15,7 @@ typedef struct Player {
 int map_size;
 
 void printBox(int width, int height, Player *players, int player_count);
-void guess1(int *x, int *y, int manhattan);
-void guess2(int *x, int *y, int manhattan);
+void guess(int *x, int *y, int manhattan);
 
 int main(int argc, char *argv[]) {
     if (argc != 2) {
@@ -70,15 +69,15 @@ int main(int argc, char *argv[]) {
         printf("Fork failed!\n");
         return -3;
     }
-
+    
         if(pid == 0) {
+            srand(getpid());
             close(fd1[READ_END]);
             close(fd2[WRITE_END]);
 
             int sentx, senty, getx, gety, distance, manhattan;
             for(int i = 1; i < 4; i++) {
-
-                guess1(&sentx, &senty, manhattan);
+                guess(&sentx, &senty, manhattan);
                 
                 read(fd2[READ_END], &getx, sizeof(getx)); 
                 read(fd2[READ_END], &gety, sizeof(gety));
@@ -99,13 +98,12 @@ int main(int argc, char *argv[]) {
             close(fd1[WRITE_END]);
 
         } else {
-
+            srand(getpid());
             int sentx, senty, getx, gety, distance, manhattan;
             close(fd2[READ_END]);
             close(fd1[WRITE_END]);
             for(int i = 1; i < 4; i++) {
-
-                guess2(&sentx, &senty, manhattan);
+                guess(&sentx, &senty, manhattan);
 
                 write(fd2[WRITE_END],&sentx, sizeof(sentx));
                 write(fd2[WRITE_END], &senty, sizeof(senty));
@@ -161,9 +159,8 @@ void printBox(int width, int height, Player *players, int player_count) {
     printf("-+\n");
 }
 
-void guess1(int *x, int *y, int manhattan) {
+void guess(int *x, int *y, int manhattan) {
     if(manhattan == 0){
-        srand(time(NULL));
         *x = rand() % map_size;
         *y = rand() % map_size;
     }else{
@@ -178,109 +175,44 @@ void guess1(int *x, int *y, int manhattan) {
             int y2 = (*y) + yDiff;
             
             if(xDiff == 0){
-                if(x1 >= 0 && x1 <= 7 && y1 >= 0 && y1 <= 7){
+                if(x1 >= 0 && x1 < map_size && y1 >= 0 && y1 < map_size){
                     coords[size][0] = x1;
                     coords[size][1] = y1;
                     size++;
                 }
-                if(x1 >= 0 && x1 <= 7 && y2 >= 0 && y2 <= 7){
-                    coords[size][0] = x1;
-                    coords[size][1] = y2;
-                    size++;
-                }
-            }else if(yDiff == 0){
-                if(x1 >= 0 && x1 <= 7 && y1 >= 0 && y1 <= 7){
-                    coords[size][0] = x1;
-                    coords[size][1] = y1;
-                    size++;
-                }
-                if(x2 >= 0 && x2 <= 7 && y1 >= 0 && y1 <= 7){
-                    coords[size][0] = x2;
-                    coords[size][1] = y1;
-                    size++;
-                }
-            }else{
-                if(x1 >= 0 && x1 <= 7 && y1 >= 0 && y1 <= 7){
-                    coords[size][0] = x1;
-                    coords[size][1] = y1;
-                    size++;
-                }
-                if(x1 >= 0 && x1 <= 7 && y2 >= 0 && y2 <= 7){
-                    coords[size][0] = x1;
-                    coords[size][1] = y2;
-                    size++;
-                }
-                if(x2 >= 0 && x2 <= 7 && y1 >= 0 && y1 <= 7){
-                    coords[size][0] = x2;
-                    coords[size][1] = y1;
-                    size++;
-                }
-                if(x2 >= 0 && x2 <= 7 && y2 >= 0 && y2 <= 7){
-                    coords[size][0] = x2;
-                    coords[size][1] = y2;
-                    size++;
-                }
-            }
-        }
-        int guess = rand() % size;
-        *x = coords[guess][0];
-        *y = coords[guess][1];
-    }
-}
-
-void guess2(int *x, int *y, int manhattan) {
-    if(manhattan == 0){
-        *x = rand() % map_size;
-        *y = rand() % map_size;
-    }else{
-        int coords[(manhattan+1)*4][2];
-        int size = 0;
-        for(int i = 0; i <= manhattan; i++){
-            int xDiff = i;
-            int yDiff = manhattan - xDiff;
-            int x1 = (*x) - xDiff;
-            int x2 = (*x) + xDiff;
-            int y1 = (*y) - yDiff;
-            int y2 = (*y) + yDiff;
-            if(xDiff == 0){
-                if(x1 >= 0 && x1 <= 7 && y1 >= 0 && y1 <= 7){
-                    coords[size][0] = x1;
-                    coords[size][1] = y1;
-                    size++;
-                }
-                if(x1 >= 0 && x1 <= 7 && y2 >= 0 && y2 <= 7){
+                if(x1 >= 0 && x1 < map_size && y2 >= 0 && y2 < map_size){
                     coords[size][0] = x1;
                     coords[size][1] = y2;
                     size++;
                 }
             }else if(yDiff == 0){
-                if(x1 >= 0 && x1 <= 7 && y1 >= 0 && y1 <= 7){
+                if(x1 >= 0 && x1 < map_size && y1 >= 0 && y1 < map_size){
                     coords[size][0] = x1;
                     coords[size][1] = y1;
                     size++;
                 }
-                if(x2 >= 0 && x2 <= 7 && y1 >= 0 && y1 <= 7){
+                if(x2 >= 0 && x2 < map_size && y1 >= 0 && y1 < map_size){
                     coords[size][0] = x2;
                     coords[size][1] = y1;
                     size++;
                 }
             }else{
-                if(x1 >= 0 && x1 <= 7 && y1 >= 0 && y1 <= 7){
+                if(x1 >= 0 && x1 < map_size && y1 >= 0 && y1 < map_size){
                     coords[size][0] = x1;
                     coords[size][1] = y1;
                     size++;
                 }
-                if(x1 >= 0 && x1 <= 7 && y2 >= 0 && y2 <= 7){
+                if(x1 >= 0 && x1 < map_size && y2 >= 0 && y2 < map_size){
                     coords[size][0] = x1;
                     coords[size][1] = y2;
                     size++;
                 }
-                if(x2 >= 0 && x2 <= 7 && y1 >= 0 && y1 <= 7){
+                if(x2 >= 0 && x2 < map_size && y1 >= 0 && y1 < map_size){
                     coords[size][0] = x2;
                     coords[size][1] = y1;
                     size++;
                 }
-                if(x2 >= 0 && x2 <= 7 && y2 >= 0 && y2 <= 7){
+                if(x2 >= 0 && x2 < map_size && y2 >= 0 && y2 < map_size){
                     coords[size][0] = x2;
                     coords[size][1] = y2;
                     size++;
