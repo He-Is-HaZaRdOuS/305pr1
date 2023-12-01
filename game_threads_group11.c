@@ -21,16 +21,14 @@ typedef struct Player {
   int score;
 } Player;
 
-Player* players;
+Player *players;
 
 /* Prototype functions */
-void printBox(int x, int y, const Player* players, int player_count);
+void printBox(int x, int y, const Player *players, int player_count);
+void assignUniquePositions(Player *players, int playerCount, int mapSize);
+void *threadRoutine(void *args);
 
-void assignUniquePositions(Player* players, int playerCount, int mapSize);
-
-void* threadRoutine(void* args);
-
-int main(const int argc, char* argv[]) {
+int main(const int argc, char *argv[]) {
   /* Handle all possible CLA errors */
   if (argc != 3) {
     printf("Usage: ./game_threads <map_size> <thread_count>\n");
@@ -57,7 +55,7 @@ int main(const int argc, char* argv[]) {
   printf("Thread count: %d\n", th_count);
 
   /* initialize semaphore to be used across threads */
-  sem_init(&mutex, 0, 1);
+    sem_init(&mutex, 0, 1);
 
   /* allocate memory to Player objects */
   players = malloc(sizeof(Player) * th_count);
@@ -84,7 +82,7 @@ int main(const int argc, char* argv[]) {
 
   printf("Round: %d\n", currentRound);
   /* Allocate memory to thread objects and call them */
-  pthread_t* threads = malloc(sizeof(pthread_t) * th_count);
+  pthread_t *threads = malloc(sizeof(pthread_t) * th_count);
   for (int i = 0; i < th_count; i++) {
     pthread_create(threads + i, NULL, threadRoutine, players + i);
   }
@@ -103,13 +101,13 @@ int main(const int argc, char* argv[]) {
   return 0;
 }
 
-void* threadRoutine(void* args) {
+void *threadRoutine(void *args) {
   const Player p = *(Player *)args; /* type-cast voidptr to Player type */
 
   /* busy wait until previous player makes their guess */
-  while (tr_counter != p.id);
+  while(tr_counter != p.id);
   /* iterate for 5 rounds */
-  while (currentRound != ROUND_COUNT + 1) {
+  while(currentRound != ROUND_COUNT + 1) {
     /* lock */
     sem_wait(&mutex);
     /* CRITICAL SECTION */
@@ -130,10 +128,10 @@ void* threadRoutine(void* args) {
 
     tr_counter++; /* increment dummy variable */
     /* if dummy variable reaches ROUND_COUNT, transition into new round and reset dummy variable */
-    if (tr_counter == th_count + 1) {
+    if(tr_counter == th_count + 1) {
       currentRound++;
       tr_counter = 1;
-      if (currentRound <= 5)
+      if(currentRound <= 5)
         printf("Round: %d\n", currentRound);
     }
 
@@ -142,15 +140,18 @@ void* threadRoutine(void* args) {
 
     /* remainder non-critical section */
     {
+
       /* busy wait until new round is started */
-      while (tr_counter != p.id && currentRound != ROUND_COUNT + 1);
+      while(tr_counter != p.id && currentRound != ROUND_COUNT + 1);
+
     }
+
   } /* end of while loop */
 
   return NULL;
 }
 
-void printBox(const int x, const int y, const Player* players, const int player_count) {
+void printBox(const int x, const int y, const Player *players, const int player_count) {
   // top border
   printf("+");
   for (int i = 0; i < x; i++) {
@@ -171,7 +172,7 @@ void printBox(const int x, const int y, const Player* players, const int player_
       if (is_player)
         printf("%3d", is_player);
       else
-        printf("  .");
+        printf("   ");
     }
     printf(" |\n");
   }
@@ -187,45 +188,53 @@ void printBox(const int x, const int y, const Player* players, const int player_
 /**
  * @brief Assigns unique positions to given players
  *
- * 1. Create an array of all integers representing possible points
+ * 1. Create an array of all possible points
  * 2. Select random index r, assign the position at index r to a player
  * 3. Swap the last item in the array with the item r
- * 4. Decrease the size of array by 1
+ * 4. Decrease the size of array(k) by 1
  *
- * @see https://www.tldraw.com/s/v2_c_BMjYadFUbGcHkvWDuP8GA?viewport=35,15,1443,740&page=page:oOgqbFfUkr671f-oFy9Of
- *
- * @warning Allocates (mapSize * mapSize * 4) bytes of memory during operation
+ * @warning Allocates (mapSize * mapSize * 8) bytes of memory during operation
  *
  * @param players Array of Players which will be assigned to a position, must be
  * allocated before passing
  * @param playerCount The number of players to assign positions for.
  * @param mapSize The size of the square map
  */
-void assignUniquePositions(Player* players, const int playerCount, const int mapSize) {
+void assignUniquePositions(Player *players, const int playerCount, const int mapSize) {
+  struct Point {
+    int x;
+    int y;
+  };
+
   // calculate the total number of positions on the map
   const size_t posCount = mapSize * mapSize;
 
-  // allocate (mapSize * mapSize * 4) bytes for the array of available position indexes
-  int* availables = malloc(posCount * sizeof(int));
+  // allocate (mapSize * mapSize * 8) bytes for the array of available positions
+  struct Point *availables = malloc(posCount * sizeof(struct Point));
 
-  int avPosCount = mapSize * mapSize; // number of available positions
+  int avPosCount = 0; // number of available positions
 
-  // fill available position indexes array with all possible positions
-  for (int i = 0; i < posCount; i++)
-    availables[i] = i;
+  // fill available positions array with all possible positions
+  for (int i = 0; i < mapSize; i++) {
+    for (int j = 0; j < mapSize; j++) {
+      availables[avPosCount].x = j;
+      availables[avPosCount].y = i;
+      avPosCount++;
+    }
+  }
 
   int p = 0; // player index
   while (avPosCount > 0 && p < playerCount) {
     // select a random index [0, position count)
     int r = rand() % avPosCount;
     // assign the selected position to the current player
-    players[p].x = availables[r] % mapSize;
-    players[p].y = availables[r] / mapSize;
+    players[p].x = availables[r].x;
+    players[p].y = availables[r].y;
 
     // replace the selected position with the last position in the array
     availables[r] = availables[avPosCount - 1];
     avPosCount--; // decrement the available position counter by 1
-    p++; // select next player
+    p++;          // select next player
   }
   free(availables);
 }
