@@ -15,8 +15,7 @@ typedef struct Player {
 int map_size;
 
 void printBox(int width, int height, Player *players, int player_count);
-void guess1(int *x, int *y);
-void guess2(int *x, int *y);
+void guess(int *x, int *y, int manhattan);
 
 int main(int argc, char *argv[]) {
     if (argc != 2) {
@@ -62,9 +61,9 @@ int main(int argc, char *argv[]) {
         printf("Pipe2 failed!\n");
         return -2;
     }
-    
+
     printf("Game launches -->\n");
-    
+
     pid = fork();
     if(pid < 0) {
         printf("Fork failed!\n");
@@ -72,15 +71,16 @@ int main(int argc, char *argv[]) {
     }
 
         if(pid == 0) {
+            srand(getpid());
             close(fd1[READ_END]);
             close(fd2[WRITE_END]);
 
-            int sentx, senty, getx, gety, distance;
+            int sentx, senty, getx, gety, distance, manhattan;
+            sentx = senty = getx = gety = distance = manhattan = 0;
             for(int i = 1; i < 4; i++) {
+                guess(&sentx, &senty, manhattan);
 
-                guess1(&sentx, &senty);
-
-                read(fd2[READ_END], &getx, sizeof(getx)); 
+                read(fd2[READ_END], &getx, sizeof(getx));
                 read(fd2[READ_END], &gety, sizeof(gety));
 
                 printf("---------- Round-%d ----------\n", i);
@@ -89,7 +89,9 @@ int main(int argc, char *argv[]) {
                 printf("%d.guess of player1: [%d,%d]\n",i ,sentx, senty);
                 read(fd2[READ_END], &distance, sizeof(distance));
                 printf("the distance with player2: %d\n", distance);
-                
+
+                manhattan = distance;
+
                 distance = abs(players[0].x - getx) + abs(players[0].y - gety);
                 write(fd1[WRITE_END], &distance, sizeof(distance));
             }
@@ -97,22 +99,23 @@ int main(int argc, char *argv[]) {
             close(fd1[WRITE_END]);
 
         } else {
-
-            int sentx, senty, getx, gety, distance;
+            srand(getpid());
+            int sentx, senty, getx, gety, distance, manhattan;
+            sentx = senty = getx = gety = distance = manhattan = 0;
             close(fd2[READ_END]);
             close(fd1[WRITE_END]);
             for(int i = 1; i < 4; i++) {
-
-                guess2(&sentx, &senty);
+                guess(&sentx, &senty, manhattan);
 
                 write(fd2[WRITE_END],&sentx, sizeof(sentx));
                 write(fd2[WRITE_END], &senty, sizeof(senty));
-                read(fd1[READ_END], &getx, sizeof(getx)); 
+                read(fd1[READ_END], &getx, sizeof(getx));
                 read(fd1[READ_END], &gety, sizeof(gety));
                 distance = abs(players[1].x - getx) + abs(players[1].y - gety);
                 write(fd2[WRITE_END], &distance, sizeof(distance));
 
                 read(fd1[READ_END], &distance, sizeof(distance));
+                manhattan = distance;
                 printf("%d.guess of player2: [%d,%d]\n",i ,sentx, senty);
                 printf("the distance with player1: %d\n", distance);
 
@@ -158,12 +161,69 @@ void printBox(int width, int height, Player *players, int player_count) {
     printf("-+\n");
 }
 
-void guess1(int *x, int *y) {
-    *x = rand() % map_size;
-    *y = rand() % map_size;
-}
+void guess(int *x, int *y, int manhattan) {
+    if(manhattan == 0){
+        *x = rand() % map_size;
+        *y = rand() % map_size;
+    }else{
+        int coords[(manhattan+1)*4][2];
+        int size = 0;
+        for(int i = 0; i <= manhattan; i++){
+            int xDiff = i;
+            int yDiff = manhattan - xDiff;
+            int x1 = (*x) - xDiff;
+            int x2 = (*x) + xDiff;
+            int y1 = (*y) - yDiff;
+            int y2 = (*y) + yDiff;
 
-void guess2(int *x, int *y) {
-    *x = rand() % map_size;
-    *y = rand() % map_size;
+            if(xDiff == 0){
+                if(x1 >= 0 && x1 < map_size && y1 >= 0 && y1 < map_size){
+                    coords[size][0] = x1;
+                    coords[size][1] = y1;
+                    size++;
+                }
+                if(x1 >= 0 && x1 < map_size && y2 >= 0 && y2 < map_size){
+                    coords[size][0] = x1;
+                    coords[size][1] = y2;
+                    size++;
+                }
+            }else if(yDiff == 0){
+                if(x1 >= 0 && x1 < map_size && y1 >= 0 && y1 < map_size){
+                    coords[size][0] = x1;
+                    coords[size][1] = y1;
+                    size++;
+                }
+                if(x2 >= 0 && x2 < map_size && y1 >= 0 && y1 < map_size){
+                    coords[size][0] = x2;
+                    coords[size][1] = y1;
+                    size++;
+                }
+            }else{
+                if(x1 >= 0 && x1 < map_size && y1 >= 0 && y1 < map_size){
+                    coords[size][0] = x1;
+                    coords[size][1] = y1;
+                    size++;
+                }
+                if(x1 >= 0 && x1 < map_size && y2 >= 0 && y2 < map_size){
+                    coords[size][0] = x1;
+                    coords[size][1] = y2;
+                    size++;
+                }
+                if(x2 >= 0 && x2 < map_size && y1 >= 0 && y1 < map_size){
+                    coords[size][0] = x2;
+                    coords[size][1] = y1;
+                    size++;
+                }
+                if(x2 >= 0 && x2 < map_size && y2 >= 0 && y2 < map_size){
+                    coords[size][0] = x2;
+                    coords[size][1] = y2;
+                    size++;
+                }
+            }
+        }
+
+        int guess = rand() % size;
+        *x = coords[guess][0];
+        *y = coords[guess][1];
+    }
 }
