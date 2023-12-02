@@ -1,9 +1,9 @@
 #include <pthread.h>
 #include <semaphore.h>
-#include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <limits.h>
 
 #define ROUND_COUNT 5
 
@@ -14,11 +14,12 @@ int tr_counter = 1;
 int map_size;
 int th_count;
 
+
 /* Player class */
 typedef struct Player {
   int x, y;
   int id;
-  int score;
+  int closestGuess;
 } Player;
 
 Player* players;
@@ -27,6 +28,8 @@ Player* players;
 void printBox(int x, int y, const Player* players, int player_count);
 
 void assignUniquePositions(Player* players, int playerCount, int mapSize);
+
+int getRandomInRange(int min, int max);
 
 void* threadRoutine(void* args);
 
@@ -69,7 +72,7 @@ int main(const int argc, char* argv[]) {
     assignUniquePositions(players, th_count, map_size);
     for (int i = 0; i < th_count; i++) {
       players[i].id = i + 1;
-      players[i].score = 0;
+      players[i].closestGuess = INT_MAX;
     }
   }
 
@@ -82,7 +85,7 @@ int main(const int argc, char* argv[]) {
   printf("\n");
   printBox(map_size, map_size, players, th_count);
 
-  printf("Round: %d\n", currentRound);
+  printf("----------Round %d ----------\n", currentRound);
   /* Allocate memory to thread objects and call them */
   pthread_t* threads = malloc(sizeof(pthread_t) * th_count);
   for (int i = 0; i < th_count; i++) {
@@ -94,7 +97,51 @@ int main(const int argc, char* argv[]) {
     pthread_join(threads[i], NULL);
   }
 
-  //printf("currentRound: %d\n", currentRound);
+  // Checking for the winner with the closest guess
+  int minDistance = INT_MAX;
+  printf("The game ends!\n");
+
+  /* helper vars */
+  int thBool[th_count];
+  int thIndex[th_count];
+  int winnerCount = 0;
+  int winnerIndex = 0;
+
+  /* find minumum distance */
+  for (int i = 0; i < th_count; i++) {
+    if(players[i].closestGuess < minDistance) {
+      minDistance = players[i].closestGuess;
+      thBool[i] = 0;
+      thIndex[i] = 0;
+    }
+  }
+
+  /* mark player(s) with minimum distance within helper vars */
+  for (int i = 0; i < th_count; i++) {
+    if(players[i].closestGuess == minDistance) {
+      thBool[i] = 1;
+      thIndex[i] = players[i].id;
+      winnerCount++;
+      winnerIndex = players[i].id;;
+    }
+  }
+
+  if(winnerCount == 1) {
+    printf("Player%d won the game with closest distance guess of %d \n", winnerIndex, minDistance);
+  }
+  else {
+    printf("Players: ");
+    for (int i = 0; i < th_count; i++) {
+      if(thBool[i] == 1) {
+        printf(" %d", thIndex[i]);
+        if(i < winnerCount - 1)
+          printf(", ");
+      }
+    }
+    printf(". tied the game with a distance guess of %d \n", minDistance);
+  }
+
+  printf("\n");
 
   /* destroy objects */
   free(threads);
@@ -103,51 +150,81 @@ int main(const int argc, char* argv[]) {
   return 0;
 }
 
+int getRandomInRange(int min, int max) {
+  return rand() % (max - min + 1) + min;
+}
+
 void* threadRoutine(void* args) {
-  const Player p = *(Player *)args; /* type-cast voidptr to Player type */
+    Player* p = (Player*)args; /* type-cast voidptr to Player type */
 
-  /* busy wait until previous player makes their guess */
-  while (tr_counter != p.id);
-  /* iterate for 5 rounds */
-  while (currentRound != ROUND_COUNT + 1) {
-    /* lock */
-    sem_wait(&mutex);
-    /* CRITICAL SECTION */
+    int minDistance = INT_MAX;
+    // Randomly choosing a new guess x and y for the first round
+    int guessX = rand() % map_size;
+    int guessY = rand() % map_size;
 
-    //printf("tr_counter: %d\n", tr_counter);
+    while (currentRound <= ROUND_COUNT) {
+        sem_wait(&mutex); /* lock */
 
-    printf("I am player #%d at [%d,%d]\n", p.id, p.x, p.y);
-    // TODO: Make a guess?
-    /*
-     * CALCULATE MANHATTAN DISTANCE TO ALL OTHER PLAYERS
-     *
-     * either do the whole guessing logic here or make
-     * a separate function and call it here, you can declare
-     * additional global variables to communicate between threads
-     * and store information about each round.
-     */
-    //sleep(1); /* remove sleep function when actually testing (placeholder) */
+        printf("%d.guess of player%d: [%d,%d]\n", currentRound, p->id, guessX, guessY);
 
-    tr_counter++; /* increment dummy variable */
-    /* if dummy variable reaches ROUND_COUNT, transition into new round and reset dummy variable */
-    if (tr_counter == th_count + 1) {
-      currentRound++;
-      tr_counter = 1;
-      if (currentRound <= 5)
-        printf("Round: %d\n", currentRound);
+        for (int i = 0; i < th_count; i++) {
+            if (i != p->id - 1) {
+                // Calculate the Manhattan distance between the current player's guess and other players' positions
+                const int distance = abs(guessX - players[i].x) + abs(guessY - players[i].y);
+                printf("the distance with player%d: %d\n", players[i].id, distance);
+
+                // Check if the distance is 0, indicating that the current player has won
+                if (distance == 0) {
+                    printf("**********************************\n");
+                    printf("player%d won the game !!!\n", p->id);
+                    printf("**********************************\n");
+
+                    exit(0);
+                }
+
+                // Update minDistance based on the Manhattan distance
+                if (distance < minDistance) {
+                    minDistance = distance;
+                }
+                p->closestGuess = minDistance;
+            }
+        }
+
+        tr_counter++;
+
+        // Calculate the boundaries for the next guess based on the minDistance
+        int minX = guessX - minDistance;
+        int minY = guessY - minDistance;
+        int maxX = guessX + minDistance;
+        int maxY = guessY + minDistance;
+
+        // Adjust boundaries to ensure they are within the map limits
+        if (minX < 0) { minX = 0; }
+        if (minY < 0) { minY = 0; }
+        if (maxX >= map_size) { maxX = map_size - 1; }
+        if (maxY >= map_size) { maxY = map_size - 1; }
+
+        // Generate a new random guess within the adjusted boundaries
+        guessX = getRandomInRange(minX, maxX);
+        guessY = getRandomInRange(minY, maxY);
+
+        // Check if all threads have completed their turns for the current round
+        if (tr_counter == th_count + 1) {
+            currentRound++;
+            tr_counter = 1;
+
+            if (currentRound <= ROUND_COUNT) {
+                printf("----------Round %d ---------- \n", currentRound);
+            }
+        }
+
+        sem_post(&mutex); /* unlock */
+
+        // Wait for other threads to complete their turns for the current round
+        while (tr_counter != p->id && currentRound <= ROUND_COUNT);
     }
 
-    /* unlock */
-    sem_post(&mutex);
-
-    /* remainder non-critical section */
-    {
-      /* busy wait until new round is started */
-      while (tr_counter != p.id && currentRound != ROUND_COUNT + 1);
-    }
-  } /* end of while loop */
-
-  return NULL;
+    return NULL;
 }
 
 void printBox(const int x, const int y, const Player* players, const int player_count) {
@@ -171,7 +248,7 @@ void printBox(const int x, const int y, const Player* players, const int player_
       if (is_player)
         printf("%3d", is_player);
       else
-        printf("   ");
+        printf("  .");
     }
     printf(" |\n");
   }
