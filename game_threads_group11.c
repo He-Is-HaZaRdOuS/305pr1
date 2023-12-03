@@ -143,9 +143,12 @@ int main(const int argc, char* argv[]) {
 
   /* Win/Tie conditions */
   if(winnerCount == 1) {
+    printf("*******************************************************************\n");
     printf("Player%d won the game with closest distance guess of %d \n", winnerIndex, minDistance);
+    printf("*******************************************************************\n");
   }
   else {
+    printf("*******************************************************************\n");
     printf("Players: ");
     for (int i = 0; i < th_count; i++) {
       if(thBool[i] == 1) {
@@ -155,9 +158,8 @@ int main(const int argc, char* argv[]) {
       }
     }
     printf(". tied the game with a distance guess of %d \n", minDistance);
+    printf("*******************************************************************\n");
   }
-
-  printf("\n");
 
   /* destroy objects */
   free(threads);
@@ -194,6 +196,9 @@ void* threadRoutine(void* args) {
                 // Check if the distance is 0, indicating that the current player has won
                 if (distance == 0) {
                   state = FINISHED; /* Skip other threads */
+                  currentRound++;
+                  tr_counter = 1;
+                  sem_post(&mutex); /* unlock */
                   printf("**********************************\n");
                   printf("player%d won the game !!!\n", p->id);
                   printf("**********************************\n");
