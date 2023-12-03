@@ -15,6 +15,7 @@ typedef struct Player {
     int closestGuess;
 } Player;
 
+// to keep state of processes
 enum State {
     ONGOING,
     P1WON,
@@ -31,11 +32,13 @@ void printBox(int width, int height, Player *players, int player_count);
 void guess(int *x, int *y, int manhattan);
 
 int main(int argc, char *argv[]) {
+    //check usage of executable file
     if (argc != 2) {
         printf("Usage: ./game_process <map_size>\n");
         return 1;
     }
 
+    //check map size
     map_size = atoi(argv[1]);
     if (map_size < 2) {
         printf("Map size cannot be less than 2\n");
@@ -68,6 +71,7 @@ int main(int argc, char *argv[]) {
     int fd1[2], fd2[2], fd3[2], fd4[2];
     pid_t pid;
 
+    //check pipes created successfully or not
     if (pipe(fd1) == -1) {
         printf("Pipe1 failed!\n");
         return -1;
@@ -89,13 +93,16 @@ int main(int argc, char *argv[]) {
 
     printf("Game launches -->\n");
 
+    //check fork() function is successfull
     pid = fork();
     if (pid < 0) {
         printf("Fork failed!\n");
         return -5;
     }
 
+    //child process
     if (pid == 0) {
+        //close unused ends
         srand(getpid());
         close(fd1[READ_END]);
         close(fd2[WRITE_END]);
@@ -103,37 +110,46 @@ int main(int argc, char *argv[]) {
         int sentx, senty, getx, gety, distance, manhattan, minDistance;
         sentx = senty = getx = gety = distance = minDistance = manhattan = 0;
         for (int i = 1; i <= ROUND_COUNT; i++) {
+            //if it is not first round get round state from parent
             if(i != 1) {
                 close(fd4[WRITE_END]);
                 read(fd4[READ_END], &state, sizeof(state));
             }
+            //check state and round number
             if(state == ONGOING && currentRound == i) {
                 guess(&sentx, &senty, manhattan);
 
+                //read guess of player2
                 read(fd2[READ_END], &getx, sizeof(getx));
                 read(fd2[READ_END], &gety, sizeof(gety));
 
                 printf("---------- Round-%d ----------\n", i);
+                //sent guess of player1
                 write(fd1[WRITE_END], &sentx, sizeof(sentx));
                 write(fd1[WRITE_END], &senty, sizeof(senty));
                 printf("%d.guess of player1: [%d,%d]\n", i, sentx, senty);
+                //read distance between player2 and guess
                 read(fd2[READ_END], &distance, sizeof(distance));
                 printf("the distance with player2: %d\n", distance);
                 manhattan = distance;
+                //sent distance to parent
                 write(fd3[WRITE_END], &distance, sizeof(distance));
-
-                distance = abs(players[0].x - getx) + abs(players[0].y - gety);
+                //if distance equal 0 player1 won the game break loop
+                if(distance == 0)
+                    break;
+                distance = abs(players[0].x - getx) + abs(players[0].y - gety);//calculate distance
                 write(fd1[WRITE_END], &distance, sizeof(distance));
 
             }
 
             currentRound++;
         }
-
+        //close open ends of pipes
         close(fd2[READ_END]);
         close(fd1[WRITE_END]);
         close(fd3[WRITE_END]);
-
+    
+    //parent process
     } else {
         srand(getpid());
         int sentx, senty, getx, gety, distance, manhattan, minDistance;
@@ -144,11 +160,14 @@ int main(int argc, char *argv[]) {
             if(state == ONGOING && currentRound == i) {
                 guess(&sentx, &senty, manhattan);
 
+                //sent guess to child
                 write(fd2[WRITE_END], &sentx, sizeof(sentx));
                 write(fd2[WRITE_END], &senty, sizeof(senty));
+
+                //read guess of player1
                 read(fd1[READ_END], &getx, sizeof(getx));
                 read(fd1[READ_END], &gety, sizeof(gety));
-                distance = abs(players[1].x - getx) + abs(players[1].y - gety);
+                distance = abs(players[1].x - getx) + abs(players[1].y - gety);//calculate distance
                 write(fd2[WRITE_END], &distance, sizeof(distance));
                 read(fd1[READ_END], &distance, sizeof(distance));
                 manhattan = distance;
@@ -156,22 +175,25 @@ int main(int argc, char *argv[]) {
                 if(distance < players[1].closestGuess)
                     players[1].closestGuess = distance;
 
-                read(fd3[READ_END], &minDistance, sizeof(minDistance));
+                read(fd3[READ_END], &minDistance, sizeof(minDistance)); //read distance of player1
 
+                //determine the minimum distance guess for player1
                 if(minDistance < players[0].closestGuess)
                     players[0].closestGuess = minDistance;
-                //printf("\n%d\n", players[0].closestGuess);
 
+                //determine new state
                 if (minDistance == 0) {
                     if(state == P2WON)
                         state = TIE;
                     else
                         state = P1WON;
                 }
-
+                if(minDistance == 0)
+                    break;
                 printf("%d.guess of player2: [%d,%d]\n", i, sentx, senty);
                 printf("the distance with player1: %d\n", distance);
 
+                //determine new state
                 if (distance == 0) {
                     if(state == P1WON)
                         state = TIE;
@@ -179,18 +201,23 @@ int main(int argc, char *argv[]) {
                         state = P2WON;
                 }
                 close(fd4[READ_END]);
-                write(fd4[WRITE_END], &state, sizeof(state));
+                write(fd4[WRITE_END], &state, sizeof(state));//sent new state to child process
 
             }
 
             currentRound++;
         }
 
+        //print winner player
         if(state == P1WON) {
+            printf("******************************************\n");
             printf("Player1 won the game \n");
+            printf("******************************************\n");
         }
         else if(state == P2WON) {
+            printf("******************************************\n");
             printf("Player2 won the game \n");
+            printf("******************************************\n");
         }
         else if(state == TIE) {
             printf("Players 1 and 2 tied the game");
@@ -246,6 +273,7 @@ void printBox(int width, int height, Player *players, int player_count) {
     printf("-+\n");
 }
 
+//do a logical guess
 void guess(int *x, int *y, int manhattan) {
     if (manhattan == 0) {
         *x = rand() % map_size;
