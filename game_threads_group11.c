@@ -14,7 +14,6 @@ int tr_counter = 1;
 int map_size;
 int th_count;
 
-
 /* Player class */
 typedef struct Player {
   int x, y;
@@ -22,7 +21,13 @@ typedef struct Player {
   int closestGuess;
 } Player;
 
+enum State {
+  ONGOING,
+  FINISHED
+};
+
 Player* players;
+enum State state;
 
 /* Prototype functions */
 void printBox(int x, int y, const Player* players, int player_count);
@@ -64,6 +69,7 @@ int main(const int argc, char* argv[]) {
 
   /* allocate memory to Player objects */
   players = malloc(sizeof(Player) * th_count);
+  state = ONGOING;
 
   srand(time(NULL));
 
@@ -97,11 +103,20 @@ int main(const int argc, char* argv[]) {
     pthread_join(threads[i], NULL);
   }
 
-  // Checking for the winner with the closest guess
-  int minDistance = INT_MAX;
+  //printf("Game state: %d", state);
+  if(state == FINISHED) {
+    /* destroy objects */
+    free(threads);
+    free(players);
+    sem_destroy(&mutex);
+    return 0;
+  }
+
+  // Checking for the winner(s) with the closest guess
   printf("The game ends!\n");
 
   /* helper vars */
+  int minDistance = INT_MAX;
   int thBool[th_count];
   int thIndex[th_count];
   int winnerCount = 0;
@@ -116,7 +131,7 @@ int main(const int argc, char* argv[]) {
     }
   }
 
-  /* mark player(s) with minimum distance within helper vars */
+  /* mark player(s) with minimum distance */
   for (int i = 0; i < th_count; i++) {
     if(players[i].closestGuess == minDistance) {
       thBool[i] = 1;
@@ -126,6 +141,7 @@ int main(const int argc, char* argv[]) {
     }
   }
 
+  /* Win/Tie conditions */
   if(winnerCount == 1) {
     printf("Player%d won the game with closest distance guess of %d \n", winnerIndex, minDistance);
   }
@@ -162,11 +178,13 @@ void* threadRoutine(void* args) {
     int guessX = rand() % map_size;
     int guessY = rand() % map_size;
 
-    while (currentRound <= ROUND_COUNT) {
+    /* Iterate for ROUND_COUNT times */
+    while (currentRound <= ROUND_COUNT && state == ONGOING) {
         sem_wait(&mutex); /* lock */
 
         printf("%d.guess of player%d: [%d,%d]\n", currentRound, p->id, guessX, guessY);
 
+        /* check player's guess with other players' coordinates */
         for (int i = 0; i < th_count; i++) {
             if (i != p->id - 1) {
                 // Calculate the Manhattan distance between the current player's guess and other players' positions
@@ -175,21 +193,22 @@ void* threadRoutine(void* args) {
 
                 // Check if the distance is 0, indicating that the current player has won
                 if (distance == 0) {
-                    printf("**********************************\n");
-                    printf("player%d won the game !!!\n", p->id);
-                    printf("**********************************\n");
-
-                    exit(0);
+                  state = FINISHED; /* Skip other threads */
+                  printf("**********************************\n");
+                  printf("player%d won the game !!!\n", p->id);
+                  printf("**********************************\n");
+                  return(0);
                 }
 
                 // Update minDistance based on the Manhattan distance
                 if (distance < minDistance) {
                     minDistance = distance;
                 }
+                /* update score of player */
                 p->closestGuess = minDistance;
             }
         }
-
+        /* increment thread round counter */
         tr_counter++;
 
         // Calculate the boundaries for the next guess based on the minDistance
@@ -221,7 +240,7 @@ void* threadRoutine(void* args) {
         sem_post(&mutex); /* unlock */
 
         // Wait for other threads to complete their turns for the current round
-        while (tr_counter != p->id && currentRound <= ROUND_COUNT);
+        while (tr_counter != p->id && currentRound <= ROUND_COUNT && state != FINISHED);
     }
 
     return NULL;
@@ -294,7 +313,7 @@ void assignUniquePositions(Player* players, const int playerCount, const int map
   int p = 0; // player index
   while (avPosCount > 0 && p < playerCount) {
     // select a random index [0, position count)
-    int r = rand() % avPosCount;
+    const int r = rand() % avPosCount;
     // assign the selected position to the current player
     players[p].x = availables[r] % mapSize;
     players[p].y = availables[r] / mapSize;
